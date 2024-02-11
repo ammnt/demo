@@ -121,7 +121,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: demo
-          image: ammnt/demo@sha256:cdd936dfd06a697fdf93fe3843a05b0c09508023461625824057617015103487
+          image: ammnt/demo@sha256:a81129070a75b50cf14c0dac44b4f8654542b60c0d5ca62ed6a5587175d29c24
           securityContext:
             privileged: false
             allowPrivilegeEscalation: false
