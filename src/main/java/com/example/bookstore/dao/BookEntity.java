@@ -1,22 +1,26 @@
-package com.example.demo.dao;
+package com.example.bookstore.dao;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
 import javax.persistence.*;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "clients", indexes = {
-        @Index(name = "idx_clients_name", columnList = "name")
+@Table(name = "books", indexes = {
+        @Index(name = "idx_books_author", columnList = "author")
 })
-public class ApiEntity {
+public class BookEntity {
     @Id
     @GeneratedValue(strategy= GenerationType.AUTO)
     private Long id;
-    private String name;
-    private String comment;
-    private Double rate;
+
+    private String author;
+
+    private String title;
+
+    private Double price;
 }
