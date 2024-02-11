@@ -93,7 +93,7 @@ spec:
   ports:
     - protocol: TCP
       port: 443
-      targetPort: 8443
+      targetPort: 8080
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -134,36 +134,36 @@ spec:
             - containerPort: 8443
           resources:
             requests:
-              cpu: 128m
-              memory: 125Mi
-            limits:
               cpu: 256m
               memory: 250Mi
+            limits:
+              cpu: 512m
+              memory: 500Mi
           startupProbe:
             exec:
               command:
-                - ls
-                - /app/demo.war
-            initialDelaySeconds: 5
+                - cat
+                - /app/properties/application.properties
+            initialDelaySeconds: 30
             failureThreshold: 10
             periodSeconds: 2
           readinessProbe:
-            initialDelaySeconds: 2
+            initialDelaySeconds: 30
             periodSeconds: 3
             httpGet:
               path: /
-              port: 8443
-              scheme: HTTPS
+              port: 8080
+              scheme: HTTP
               httpHeaders:
                 - name: Host
                   value: test.msftcnsi.com
           livenessProbe:
-            initialDelaySeconds: 2
+            initialDelaySeconds: 30
             periodSeconds: 3
             httpGet:
               path: /
-              port: 8443
-              scheme: HTTPS
+              port: 8080
+              scheme: HTTP
               httpHeaders:
                 - name: Host
                   value: test.msftcnsi.com
