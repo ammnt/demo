@@ -1,0 +1,196 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo-ns
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt
+  namespace: demo-ns
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@msftcnsi.com
+    privateKeySecretRef:
+      name: letsencrypt
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+---
+apiVersion: v1
+kind: Secret
+type: Opaque
+metadata:
+  name: htpasswd
+  namespace: demo-ns
+data:
+  auth: YW1tbnQ6JGFwcjEkWHFVVm13aUckclFzQk9pQmN4SWdlN3A3TWtVSk5HMQoK
+---
+apiVersion: v1
+kind: Secret
+type: kubernetes.io/dockerconfigjson
+metadata:
+  name: docker-registry
+  namespace: demo-ns
+data:
+  .dockerconfigjson: eyJhdXRocyI6eyJjci55YW5kZXgiOnsidXNlcm5hbWUiOiJvYXV0aCIsInBhc3N3b3JkIjoieTBfQWdBQUFBQUxrS1J0QUFUdXdRQUFBQURnbU5HdzJBcXdYTC1YU1VpY3R2OHphTzI2d3NzZXVUUSIsImF1dGgiOiJiMkYxZEdnNmVUQmZRV2RCUVVGQlFVeHJTMUowUVVGVWRYZFJRVUZCUVVSbmJVNUhkekpCY1hkWVRDMVlVMVZwWTNSMk9IcGhUekkyZDNOelpYVlVVUT09In19fQ==
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: minimal-ingress
+  namespace: demo-ns
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt"
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: htpasswd
+    nginx.ingress.kubernetes.io/auth-realm: "Restricted Area"
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/affinity-mode: "balanced"
+    nginx.ingress.kubernetes.io/session-cookie-name: "route-one"
+    nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-forwarded-headers: "true"
+    nginx.ingress.kubernetes.io/enable-real-ip: "true"
+    nginx.ingress.kubernetes.io/forwarded-for-header: "true"
+    nginx.ingress.kubernetes.io/compute-full-forwarded-for: "true"
+    nginx.ingress.kubernetes.io/proxy-add-original-uri-header: "true"
+    nginx.ingress.kubernetes.io/use-proxy-protocol: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-prefer-server-ciphers: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    nginx.ingress.kubernetes.io/whitelist-source-range: 146.70.52.86/32
+spec:
+  tls:
+    - hosts:
+        - test.msftcnsi.com
+      secretName: letsencrypt
+  rules:
+    - host: test.msftcnsi.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: demo
+                port:
+                  number: 443
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo
+  namespace: demo-ns
+spec:
+  type: ClusterIP
+  selector:
+    app: demo
+  ports:
+    - protocol: TCP
+      port: 443
+      targetPort: 8443
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-deployment
+  namespace: demo-ns
+  labels:
+    app: demo
+spec:
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  replicas: 2
+  selector:
+    matchLabels:
+      app: demo
+  template:
+    metadata:
+      labels:
+        app: demo
+    spec:
+      terminationGracePeriodSeconds: 30
+      restartPolicy: Always
+      containers:
+        - name: demo
+          image: ammnt/demo@sha256:cdd936dfd06a697fdf93fe3843a05b0c09508023461625824057617015103487
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            imagePullPolicy: Always
+          env:
+            - name: TZ
+              value: Europe/Moscow
+          ports:
+            - containerPort: 8443
+          resources:
+            requests:
+              cpu: 128m
+              memory: 125Mi
+            limits:
+              cpu: 256m
+              memory: 250Mi
+          startupProbe:
+            exec:
+              command:
+                - ls
+                - /app/demo.war
+            initialDelaySeconds: 5
+            failureThreshold: 10
+            periodSeconds: 2
+          readinessProbe:
+            initialDelaySeconds: 2
+            periodSeconds: 3
+            httpGet:
+              path: /
+              port: 8443
+              scheme: HTTPS
+              httpHeaders:
+                - name: Host
+                  value: test.msftcnsi.com
+          livenessProbe:
+            initialDelaySeconds: 2
+            periodSeconds: 3
+            httpGet:
+              path: /
+              port: 8443
+              scheme: HTTPS
+              httpHeaders:
+                - name: Host
+                  value: test.msftcnsi.com
+          volumeMounts:
+            - name: demo-properties
+              mountPath: /app/properties
+              readOnly: true
+      volumes:
+        - configMap:
+            defaultMode: 256
+          name: demo-properties
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: demo-properties
+data:
+  application.properties: |-
+    spring.datasource.url=jdbc:postgresql://172.17.0.2:5432/demo
+    spring.datasource.username=admin
+    spring.datasource.password=password
+    spring.datasource.driver-class-name=org.postgresql.Driver
+    spring.jpa.hibernate.ddl-auto=update
+    spring.jpa.show-sql=true
+    spring.jackson.serialization.indent_output=true
+    logging.level.org.springframework=ERROR
+    logging.level.org.springframework.jdbc=ERROR
+    logging.level.root=ERROR
+    auth.enabled=false
+    auth.jwt.secret=30faa058f27f690c7e9a098d54ebcfb3d8725bcb85ee7907a2d84c69622229e2

@@ -5,12 +5,13 @@ RUN gradle build --no-daemon --stacktrace --debug
 
 FROM eclipse-temurin:21.0.2_13-jre-alpine
 EXPOSE 8080/tcp
-RUN mkdir /app && apk -U upgrade && apk add --no-cache tini \
+RUN mkdir /app && mkdir /app/properties && apk -U upgrade && apk add --no-cache tini \
 && addgroup -S demo && adduser -S demo -s /sbin/nologin -G demo --no-create-home && update-ca-certificates \
 && apk --purge del libgcc libstdc++ ca-certificates apk-tools \
 && rm -rf /tmp/* /var/cache/apk/ /var/cache/misc /root/.gnupg /root/.cache /root/go /etc/apk
 
 COPY --from=build /home/gradle/src/build/libs/*.war /app/demo.war
+COPY --chown=demo:demo /src/main/resources/application.properties /app/properties/application.properties
 RUN chown -R demo:demo /app && chmod -R g+w /app
 
 HEALTHCHECK --interval=3s --timeout=1s \
@@ -25,4 +26,4 @@ LABEL description="Demo Java (Spring Framework) application for microservice arc
 
 ENTRYPOINT [ "/sbin/tini", "--" ]
 USER demo
-CMD ["java", "-XX:+UnlockExperimentalVMOptions", "-XX:+UseContainerSupport", "-Djava.security.egd=file:/dev/./urandom","-jar","/app/demo.war"]
+CMD ["java", "-XX:+UnlockExperimentalVMOptions", "-XX:+UseContainerSupport", "-Dspring.config.location=/app/properties/application.properties", "-Djava.security.egd=file:/dev/./urandom", "-jar", "/app/demo.war"]
